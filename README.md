@@ -6,6 +6,8 @@ This problem is similar to the prisoner and light switch problem we saw earlier 
 
 ## Experimentation
 
+Unfortunately the way my threads work in my solution seems to have some sort of bug that I am unsure of how to trace. So while I know that this strategy works (as I was able to test it in a sequential manner), as it currently works, it works about 75% of the time. When it does work, the threads usually take about .500 seconds to all complete.
+
 # Problem 2
 
 ## Overall Strategy

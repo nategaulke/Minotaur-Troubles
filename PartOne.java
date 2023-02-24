@@ -5,6 +5,7 @@
 import java.io.*;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 
 class Guest implements Runnable {
     enum GuestState {
@@ -48,10 +49,21 @@ class Guest implements Runnable {
             switch (state) {
                 case WAITING:
                     break;
-                case IN_LABYRINTH:
-                    atCupcake();
-                    setState(GuestState.WAITING);
+                case IN_LABYRINTH: {
+                    if (!minotaur.lock.isLocked())
+                        state = GuestState.AT_CUPCAKE;
+                    try {
+                        Thread.sleep(wanderLabyrinth());
+                    } catch (Exception e) {
+                        System.out.println("Died in the maze :(");
+                    }
                     break;
+                }
+                case AT_CUPCAKE: {
+                    if (!minotaur.lock.isLocked())
+                        atCupcake();
+                    break;
+                }
                 case EVERYONE_VISITED:
                     notAllHaveBeenInMaze = false;
                     break;
@@ -63,46 +75,56 @@ class Guest implements Runnable {
         // The first guest always eats a cupcake and keeps track of how many times they
         // ate a cupcake. This will help track if all guests have definitely entered the
         // labyrinth
-        if (this.first && minotaur.cupcake.get()) {
-            System.out.println("Our first guest(" + id + ") enters the labyrinth.");
-            System.out.println("    They see a cupcake on the plate.");
-            System.out.println("    They eat the cupcake and leave.");
-            minotaur.cupcake.set(false);
-            this.numTimes++;
-            System.out.println("    The first guest has had a cupcake: " + numTimes + " time(s).");
-            if (numTimes == minotaur.numGuests) {
-                setState(GuestState.EVERYONE_VISITED);
+        minotaur.lock.lock();
+        try {
+            if (this.first && minotaur.cupcake.get()) {
+                System.out.println("Our first guest(" + id + ") enters the labyrinth.");
+                System.out.println("    They see a cupcake on the plate.");
+                System.out.println("    They eat the cupcake and leave.");
+                minotaur.cupcake.set(false);
+                this.numTimes++;
+                System.out.println("    The first guest has had a cupcake: " + numTimes + " time(s).");
+                if (numTimes == minotaur.numGuests) {
+                    setState(GuestState.EVERYONE_VISITED);
+                }
+            } else if (this.first && !minotaur.cupcake.get()) {
+                System.out.println("Our first guest(" + id + ") enters the labyrinth.");
+                System.out.println("    They don't see a cupcake on the plate.");
+                System.out.println("    They leave the plate and leave.");
+                setState(GuestState.WAITING);
             }
-        } else if (this.first && !minotaur.cupcake.get()) {
-            System.out.println("Our first guest(" + id + ") enters the labyrinth.");
-            System.out.println("    They don't see a cupcake on the plate.");
-            System.out.println("    They leave the plate and leave.");
-        }
-        // The first time a guest sees an empty plate they must put a cupcake on the
-        // plate for the first guest to eat
-        else if (!minotaur.cupcake.get() && !sawEmpty) {
-            System.out.println("Our guest(" + id + ") enters the labyrinth.");
-            System.out.println("    This is their first time seeing an empty plate in the labyrinth.");
-            System.out.println("    They request a new cupcake from the minotaur's servants.");
-            System.out.println("    They leave the cupcake and leave.");
-            minotaur.cupcake.set(true);
-            this.sawEmpty = true;
-        }
-        // Otherwise the state of the cupcake/plate does not change
-        else if (!minotaur.cupcake.get() && sawEmpty) {
-            System.out.println("Our guest(" + id + ") enters the labyrinth.");
-            System.out.println("    They have seen the plate empty before.");
-            System.out.println("    They leave the plate and leave.");
-        } else if (minotaur.cupcake.get() && !sawEmpty) {
-            System.out.println("Our guest(" + id + ") enters the labyrinth.");
-            System.out.println("    They see a cupcake on the plate.");
-            System.out.println("    They have not seen the plate empty.");
-            System.out.println("    They leave the cupcake and leave.");
-        } else if (minotaur.cupcake.get() && sawEmpty) {
-            System.out.println("Our guest(" + id + ") enters the labyrinth.");
-            System.out.println("    They see a cupcake on the plate.");
-            System.out.println("    They have seen the plate empty before.");
-            System.out.println("    They leave the plate and leave.");
+            // The first time a guest sees an empty plate they must put a cupcake on the
+            // plate for the first guest to eat
+            else if (!minotaur.cupcake.get() && !sawEmpty) {
+                System.out.println("Our guest(" + id + ") enters the labyrinth.");
+                System.out.println("    This is their first time seeing an empty plate in the labyrinth.");
+                System.out.println("    They request a new cupcake from the minotaur's servants.");
+                System.out.println("    They leave the cupcake and leave.");
+                minotaur.cupcake.set(true);
+                this.sawEmpty = true;
+                setState(GuestState.WAITING);
+            }
+            // Otherwise the state of the cupcake/plate does not change
+            else if (!minotaur.cupcake.get() && sawEmpty) {
+                System.out.println("Our guest(" + id + ") enters the labyrinth.");
+                System.out.println("    They have seen the plate empty before.");
+                System.out.println("    They leave the plate and leave.");
+                setState(GuestState.WAITING);
+            } else if (minotaur.cupcake.get() && !sawEmpty) {
+                System.out.println("Our guest(" + id + ") enters the labyrinth.");
+                System.out.println("    They see a cupcake on the plate.");
+                System.out.println("    They have not seen the plate empty.");
+                System.out.println("    They leave the cupcake and leave.");
+                setState(GuestState.WAITING);
+            } else if (minotaur.cupcake.get() && sawEmpty) {
+                System.out.println("Our guest(" + id + ") enters the labyrinth.");
+                System.out.println("    They see a cupcake on the plate.");
+                System.out.println("    They have seen the plate empty before.");
+                System.out.println("    They leave the plate and leave.");
+                setState(GuestState.WAITING);
+            }
+        } finally {
+            minotaur.lock.unlock();
         }
     }
 }
@@ -112,6 +134,7 @@ public class PartOne {
     public List<Guest> guests;
     public AtomicBoolean cupcake;
     public Guest firstGuest;
+    public ReentrantLock lock;
     public final static int DEFAULTGUESTNO = 100;
 
     public int chooseRandomGuest() {
@@ -123,6 +146,7 @@ public class PartOne {
         PartOne minotaur = new PartOne();
         minotaur.cupcake = new AtomicBoolean(true);
         minotaur.guests = new ArrayList<>();
+        minotaur.lock = new ReentrantLock();
         PrintWriter output = new PrintWriter(new FileWriter("output1.txt"));
 
         if (args.length < 1) {
@@ -166,6 +190,7 @@ public class PartOne {
                 System.out.println("The minotaur sees that Guest " + (i + 1) + " never entered the labyrinth");
                 allGuestsEntered = false;
             }
+            minotaur.guests.get(i).setState(Guest.GuestState.EVERYONE_VISITED);
         }
         if (allGuestsEntered) {
             System.out.println("The minotaur confirms that all guests have entered the maze and nods his assent");
