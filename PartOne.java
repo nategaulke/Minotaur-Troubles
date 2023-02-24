@@ -7,7 +7,7 @@ import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 
-class Guest implements Runnable {
+class Guest extends Thread {
     enum GuestState {
         WAITING, IN_LABYRINTH, AT_CUPCAKE, EVERYONE_VISITED
     };
@@ -20,7 +20,7 @@ class Guest implements Runnable {
     private PrintWriter output;
     private GuestState state;
 
-    public GuestState getState() {
+    public GuestState getGuestState() {
         return this.state;
     }
 
@@ -141,7 +141,7 @@ public class PartOne {
         return (int) (Math.random() * (numGuests)) + 1;
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws Exception {
         long start = System.currentTimeMillis();
         PartOne minotaur = new PartOne();
         minotaur.cupcake = new AtomicBoolean(true);
@@ -157,8 +157,7 @@ public class PartOne {
         for (int i = 0; i < minotaur.numGuests; i++) {
             Guest guest = new Guest(i + 1, minotaur, output);
             minotaur.guests.add(guest);
-            Thread th = new Thread(guest);
-            th.start();
+            guest.start();
         }
 
         // Our first guest is picked
@@ -171,9 +170,9 @@ public class PartOne {
 
         // After the first guest, minotaur keeps randomly picking guests to go into the
         // labyrinth
-        while (minotaur.firstGuest.getState() != Guest.GuestState.EVERYONE_VISITED) {
+        while (minotaur.firstGuest.getGuestState() != Guest.GuestState.EVERYONE_VISITED) {
             id = minotaur.chooseRandomGuest();
-            while (minotaur.guests.get(id - 1).getState() != Guest.GuestState.WAITING)
+            while (minotaur.guests.get(id - 1).getGuestState() != Guest.GuestState.WAITING)
                 id = minotaur.chooseRandomGuest();
             System.out.println("The minotaur chooses a guest (" + id + ") to enter the labyrinth!");
             minotaur.guests.get(id - 1).setState(Guest.GuestState.IN_LABYRINTH);
@@ -191,6 +190,7 @@ public class PartOne {
                 allGuestsEntered = false;
             }
             minotaur.guests.get(i).setState(Guest.GuestState.EVERYONE_VISITED);
+            minotaur.guests.get(i).join();
         }
         if (allGuestsEntered) {
             System.out.println("The minotaur confirms that all guests have entered the maze and nods his assent");
